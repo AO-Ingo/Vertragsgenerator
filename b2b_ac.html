@@ -592,7 +592,7 @@ function getLaufzeit() { return document.getElementById('vb_laufzeit')?.value||'
 function replaceTag(xml, tag, value) {
   const val=(value||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const ph='{{'+tag+'}}';
-  if(xml.includes(ph)) return xml.split(ph).join(val);
+  if(xml.includes(ph)) xml = xml.split(ph).join(val);
   const esc=ph.split('').map(c=>c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('(?:<[^>]+>)*');
   return xml.replace(new RegExp(esc,'g'),match=>{
     const rPr=(match.match(/<w:rPr>[\s\S]*?<\/w:rPr>/)||[''])[0];
