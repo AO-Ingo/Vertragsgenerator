@@ -285,6 +285,7 @@
       <option value="vollbetrieb">Vollbetrieb ohne Strom AC</option>
       <option value="betrieb">Technische Betriebsführung AC</option>
       <option value="wartung">Rahmenwartungsvertrag AC</option>
+      <option value="servicerahmen">Servicerahmenvertrag (Versicherungsmodell) AC</option>
     </select>
   </div>
   <div style="display:flex;justify-content:flex-end;margin-top:-8px;margin-bottom:12px">
@@ -345,6 +346,9 @@
     <div class="field-group">
       <div id="laufzeitWrap"><label><div class="lbl">Laufzeit <span class="req">*</span></div><input type="number" id="vb_laufzeit" min="1" max="10" placeholder="3"></label></div>
       <div id="inbetriebnahmeWrap"><label>Inbetriebnahme-Datum<input type="date" id="inbetriebnahme"></label></div>
+    </div>
+    <div class="field-group" id="preisWrap" style="display:none">
+      <label><div class="lbl">Preis je AC-Ladepunkt (€ netto/Monat) <span class="req">*</span></div><input type="text" id="sr_preis" value="5" placeholder="5"></label>
     </div>
     <input type="hidden" id="vb_angebotsnr">
   </div>
@@ -437,8 +441,8 @@
 
 // ===== CONFIG =====
 const GITHUB_BASE = 'https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/';
-const TEMPLATE_URLS = {"betrieb": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_VertragTechBetriebsfuehrung%20Vorlage.docx", "betrieb-dc": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_VertragTechBetriebsfuehrung_DC%20-%20Vorlage.docx", "vollbetrieb": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_Vollbetrieb_ohne_Strom_Vorlage.docx", "vollbetrieb-mit-strom": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_Vollbetrieb_mit_Strom_Vorlage.docx", "wartung": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_Wartungsvertrag%20Vorlage.docx"};
-const ZOHO_MAP = {"betrieb": {"id": "520234000000111332", "name": "technische Betriebsführung"}, "betrieb-dc": {"id": "520234000003960018", "name": "technische Betriebsführung DC"}, "vollbetrieb": {"id": "520234000003540041", "name": "Vollbetrieb - ganzheitlicher Betrieb der Ladestation ohne Strom"}, "vollbetrieb-mit-strom": {"id": "", "name": "Vollbetrieb mit Strom AC"}, "wartung": {"id": "520234000000056504", "name": "Wartung AC-LP bis 22kW nach DGUV-3"}};
+const TEMPLATE_URLS = {"betrieb": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_VertragTechBetriebsfuehrung%20Vorlage.docx", "betrieb-dc": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_VertragTechBetriebsfuehrung_DC%20-%20Vorlage.docx", "vollbetrieb": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_Vollbetrieb_ohne_Strom_Vorlage.docx", "vollbetrieb-mit-strom": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_Vollbetrieb_mit_Strom_Vorlage.docx", "wartung": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_Wartungsvertrag%20Vorlage.docx", "servicerahmen": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/Servicerahmenvertrag_Versicherungsmodell_Vorlage.docx"};
+const ZOHO_MAP = {"betrieb": {"id": "520234000000111332", "name": "technische Betriebsführung"}, "betrieb-dc": {"id": "520234000003960018", "name": "technische Betriebsführung DC"}, "vollbetrieb": {"id": "520234000003540041", "name": "Vollbetrieb - ganzheitlicher Betrieb der Ladestation ohne Strom"}, "vollbetrieb-mit-strom": {"id": "", "name": "Vollbetrieb mit Strom AC"}, "wartung": {"id": "520234000000056504", "name": "Wartung AC-LP bis 22kW nach DGUV-3"}, "servicerahmen": {"id": "520234000000111343", "name": "Servicerahmenvertrag"}};
 const MAKE_WEBHOOK = 'https://hook.eu2.make.com/bxt8ju15xwttjyphu3ubb1jdff6xlh4w';
 
 let currentTyp = '';
@@ -483,6 +487,10 @@ function setTyp(typ) {
   // Laufzeit (für alle Vertragstypen)
   const lw = document.getElementById('laufzeitWrap');
   if (lw) lw.style.display = '';
+
+  // Preis je Ladepunkt (nur Servicerahmenvertrag)
+  const pw2 = document.getElementById('preisWrap');
+  if (pw2) pw2.style.display = (typ === 'servicerahmen') ? '' : 'none';
 
   // Ansprechpartner + Inbetriebnahme je Vertragstyp ausgrauen
   const isTechBF = typ === 'betrieb' || typ === 'betrieb-dc';
@@ -594,27 +602,63 @@ function replaceTag(xml, tag, value) {
   const ph='{{'+tag+'}}';
   if(xml.includes(ph)) xml = xml.split(ph).join(val);
   const esc=ph.split('').map(c=>c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('(?:<[^>]+>)*');
-  return xml.replace(new RegExp(esc,'g'),match=>{
-    const rPr=(match.match(/<w:rPr>[\s\S]*?<\/w:rPr>/)||[''])[0];
-    return '<w:r>'+rPr+'<w:t>'+val+'</w:t></w:r>';
-  });
+  const re=new RegExp(esc,'g');
+  let result='', lastIndex=0, m;
+  while((m=re.exec(xml))!==null){
+    let start=m.index, end=m.index+m[0].length;
+    // Falls der Treffer genau am Anfang eines <w:t>-Inhalts beginnt (kompletter
+    // Lauf wird vom Platzhalter verbraucht), den kompletten <w:r>-Lauf ersetzen,
+    // damit kein verwaistes <w:t>/</w:t> um den neuen Run zurückbleibt.
+    if(/<w:t(?:\s[^>]*)?>$/.test(xml.slice(0,start))){
+      const runOpen1=xml.lastIndexOf('<w:r>',start);
+      const runOpen2=xml.lastIndexOf('<w:r ',start);
+      const runStart=Math.max(runOpen1,runOpen2);
+      const prevRunClose=xml.lastIndexOf('</w:r>',start);
+      if(runStart!==-1 && runStart>prevRunClose) start=runStart;
+    }
+    const closeMatch=/^<\/w:t>/.exec(xml.slice(end));
+    if(closeMatch){
+      const afterClose=end+closeMatch[0].length;
+      if(xml.slice(afterClose,afterClose+6)==='</w:r>') end=afterClose+6;
+    }
+    const matchedFull=xml.slice(start,end);
+    const rPr=(matchedFull.match(/<w:rPr>[\s\S]*?<\/w:rPr>/)||[''])[0];
+    result+=xml.slice(lastIndex,start)+'<w:r>'+rPr+'<w:t>'+val+'</w:t></w:r>';
+    lastIndex=end;
+    re.lastIndex=end;
+  }
+  result+=xml.slice(lastIndex);
+  return result;
 }
 
 // Vervielfältigt die Tabellenzeile mit {{STANDORT}}/{{LADEEINRICHTUNG}}/{{LADEPUNKTE}}
 // einmal pro erfasstem Standort, statt nur die erste Zeile zu befüllen.
+// Findet {{TAG}} auch wenn Word den Platzhalter über mehrere Runs
+// gesplittet hat (z.B. durch eine Zeichenformatvorlage auf dem
+// Platzhalter-Text). Gibt Start-Index und Länge des Gesamt-Matches zurück.
+function findTagLoose(xml, tag) {
+  const ph = '{{'+tag+'}}';
+  const esc = ph.split('').map(c=>c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('(?:<[^>]+>)*');
+  const m = new RegExp(esc).exec(xml);
+  return m ? {index: m.index, length: m[0].length} : null;
+}
+
 function expandLadeTable(xml, rows) {
-  const idx = xml.indexOf('{{STANDORT}}');
-  if (idx === -1 || !rows.length) return xml;
+  const found = findTagLoose(xml, 'STANDORT');
+  if (!found || !rows.length) return xml;
+  const idx = found.index;
   let start = xml.lastIndexOf('<w:tr ', idx);
   if (start === -1 || start === undefined) start = xml.lastIndexOf('<w:tr>', idx);
   const end = xml.indexOf('</w:tr>', idx) + '</w:tr>'.length;
   const rowXml = xml.slice(start, end);
-  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const rowsXml = rows.map(r => rowXml
-    .replace('{{STANDORT}}', esc(r.standort))
-    .replace('{{LADEEINRICHTUNG}}', esc(r.art))
-    .replace('{{LADEPUNKTE}}', esc(String(r.anzahl)))
-  ).join('');
+  const fillRow = (template, r) => {
+    let out = template;
+    out = replaceTag(out, 'STANDORT', r.standort);
+    out = replaceTag(out, 'LADEEINRICHTUNG', r.art);
+    out = replaceTag(out, 'LADEPUNKTE', String(r.anzahl));
+    return out;
+  };
+  const rowsXml = rows.map(r => fillRow(rowXml, r)).join('');
   return xml.slice(0, start) + rowsXml + xml.slice(end);
 }
 
@@ -646,6 +690,7 @@ async function genDocx() {
       'INBETRIEBNAHME': fmtDate(v('inbetriebnahme')),
       'APKFMNAME': v('ap_tech_name'), 'APKFMTEL': v('ap_tech_tel'), 'APKFMMAIL': v('ap_tech_email'),
       'APTECHNAME': v('ap_name'), 'APTECHTEL': v('ap_tel'), 'APTECHMAIL': v('ap_email'),
+      'PREIS': v('sr_preis'),
     };
     xml = expandLadeTable(xml, rows);
     for(const [tag,val] of Object.entries(repl)) xml=replaceTag(xml,tag,val);
@@ -656,6 +701,7 @@ async function genDocx() {
       'vollbetrieb': 'AMBA_Vollbetrieb_ohne_Strom',
       'betrieb': 'AMBA_Betriebsfuehrung',
       'wartung': 'AMBA_Wartungsvertrag',
+      'servicerahmen': 'AMBA_Servicerahmenvertrag',
     };
     const prefix = PREFIX[currentTyp] || 'AMBA_Vertrag';
     const slug=(v('ag_firma')||'Vertrag').replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_-]/g,'');
@@ -754,6 +800,7 @@ async function mergePDFs() {
       'vollbetrieb': 'AMBA_Vollbetrieb_ohne_Strom',
       'betrieb': 'AMBA_Betriebsfuehrung',
       'wartung': 'AMBA_Wartungsvertrag',
+      'servicerahmen': 'AMBA_Servicerahmenvertrag',
     };
     const prefix = PREFIX[currentTyp] || 'AMBA_Vertrag';
     const slug=(v('ag_firma')||'Dokument').replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_-]/g,'');
@@ -780,7 +827,7 @@ function markInvalid(el){
 }
 function validatePflichtfelder(){
   clearInvalid();
-  const ids = ['ag_firma','ag_strasse','ag_plz','ag_stadt','vb_laufzeit'];
+  const ids = ['ag_firma','ag_strasse','ag_plz','ag_stadt','vb_laufzeit','sr_preis'];
   const missing = [];
   ids.forEach(id=>{
     const el=document.getElementById(id);

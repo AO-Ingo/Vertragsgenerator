@@ -877,10 +877,33 @@ function replaceTag(xml, tag, value) {
   const ph='{{'+tag+'}}';
   if(xml.includes(ph)) xml = xml.split(ph).join(val);
   const esc=ph.split('').map(c=>c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('(?:<[^>]+>)*');
-  return xml.replace(new RegExp(esc,'g'),match=>{
-    const rPr=(match.match(/<w:rPr>[\s\S]*?<\/w:rPr>/)||[''])[0];
-    return '<w:r>'+rPr+'<w:t>'+val+'</w:t></w:r>';
-  });
+  const re=new RegExp(esc,'g');
+  let result='', lastIndex=0, m;
+  while((m=re.exec(xml))!==null){
+    let start=m.index, end=m.index+m[0].length;
+    // Falls der Treffer genau am Anfang eines <w:t>-Inhalts beginnt (kompletter
+    // Lauf wird vom Platzhalter verbraucht), den kompletten <w:r>-Lauf ersetzen,
+    // damit kein verwaistes <w:t>/</w:t> um den neuen Run zurückbleibt.
+    if(/<w:t(?:\s[^>]*)?>$/.test(xml.slice(0,start))){
+      const runOpen1=xml.lastIndexOf('<w:r>',start);
+      const runOpen2=xml.lastIndexOf('<w:r ',start);
+      const runStart=Math.max(runOpen1,runOpen2);
+      const prevRunClose=xml.lastIndexOf('</w:r>',start);
+      if(runStart!==-1 && runStart>prevRunClose) start=runStart;
+    }
+    const closeMatch=/^<\/w:t>/.exec(xml.slice(end));
+    if(closeMatch){
+      const afterClose=end+closeMatch[0].length;
+      if(xml.slice(afterClose,afterClose+6)==='</w:r>') end=afterClose+6;
+    }
+    const matchedFull=xml.slice(start,end);
+    const rPr=(matchedFull.match(/<w:rPr>[\s\S]*?<\/w:rPr>/)||[''])[0];
+    result+=xml.slice(lastIndex,start)+'<w:r>'+rPr+'<w:t>'+val+'</w:t></w:r>';
+    lastIndex=end;
+    re.lastIndex=end;
+  }
+  result+=xml.slice(lastIndex);
+  return result;
 }
 
 async function genDocx(angebotsnr) {

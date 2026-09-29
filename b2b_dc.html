@@ -594,27 +594,63 @@ function replaceTag(xml, tag, value) {
   const ph='{{'+tag+'}}';
   if(xml.includes(ph)) xml = xml.split(ph).join(val);
   const esc=ph.split('').map(c=>c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('(?:<[^>]+>)*');
-  return xml.replace(new RegExp(esc,'g'),match=>{
-    const rPr=(match.match(/<w:rPr>[\s\S]*?<\/w:rPr>/)||[''])[0];
-    return '<w:r>'+rPr+'<w:t>'+val+'</w:t></w:r>';
-  });
+  const re=new RegExp(esc,'g');
+  let result='', lastIndex=0, m;
+  while((m=re.exec(xml))!==null){
+    let start=m.index, end=m.index+m[0].length;
+    // Falls der Treffer genau am Anfang eines <w:t>-Inhalts beginnt (kompletter
+    // Lauf wird vom Platzhalter verbraucht), den kompletten <w:r>-Lauf ersetzen,
+    // damit kein verwaistes <w:t>/</w:t> um den neuen Run zurückbleibt.
+    if(/<w:t(?:\s[^>]*)?>$/.test(xml.slice(0,start))){
+      const runOpen1=xml.lastIndexOf('<w:r>',start);
+      const runOpen2=xml.lastIndexOf('<w:r ',start);
+      const runStart=Math.max(runOpen1,runOpen2);
+      const prevRunClose=xml.lastIndexOf('</w:r>',start);
+      if(runStart!==-1 && runStart>prevRunClose) start=runStart;
+    }
+    const closeMatch=/^<\/w:t>/.exec(xml.slice(end));
+    if(closeMatch){
+      const afterClose=end+closeMatch[0].length;
+      if(xml.slice(afterClose,afterClose+6)==='</w:r>') end=afterClose+6;
+    }
+    const matchedFull=xml.slice(start,end);
+    const rPr=(matchedFull.match(/<w:rPr>[\s\S]*?<\/w:rPr>/)||[''])[0];
+    result+=xml.slice(lastIndex,start)+'<w:r>'+rPr+'<w:t>'+val+'</w:t></w:r>';
+    lastIndex=end;
+    re.lastIndex=end;
+  }
+  result+=xml.slice(lastIndex);
+  return result;
 }
 
 // Vervielfältigt die Tabellenzeile mit {{STANDORT}}/{{LADEEINRICHTUNG}}/{{LADEPUNKTE}}
 // einmal pro erfasstem Standort, statt nur die erste Zeile zu befüllen.
+// Findet {{TAG}} auch wenn Word den Platzhalter über mehrere Runs
+// gesplittet hat (z.B. durch eine Zeichenformatvorlage auf dem
+// Platzhalter-Text). Gibt Start-Index und Länge des Gesamt-Matches zurück.
+function findTagLoose(xml, tag) {
+  const ph = '{{'+tag+'}}';
+  const esc = ph.split('').map(c=>c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('(?:<[^>]+>)*');
+  const m = new RegExp(esc).exec(xml);
+  return m ? {index: m.index, length: m[0].length} : null;
+}
+
 function expandLadeTable(xml, rows) {
-  const idx = xml.indexOf('{{STANDORT}}');
-  if (idx === -1 || !rows.length) return xml;
+  const found = findTagLoose(xml, 'STANDORT');
+  if (!found || !rows.length) return xml;
+  const idx = found.index;
   let start = xml.lastIndexOf('<w:tr ', idx);
   if (start === -1 || start === undefined) start = xml.lastIndexOf('<w:tr>', idx);
   const end = xml.indexOf('</w:tr>', idx) + '</w:tr>'.length;
   const rowXml = xml.slice(start, end);
-  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const rowsXml = rows.map(r => rowXml
-    .replace('{{STANDORT}}', esc(r.standort))
-    .replace('{{LADEEINRICHTUNG}}', esc(r.art))
-    .replace('{{LADEPUNKTE}}', esc(String(r.anzahl)))
-  ).join('');
+  const fillRow = (template, r) => {
+    let out = template;
+    out = replaceTag(out, 'STANDORT', r.standort);
+    out = replaceTag(out, 'LADEEINRICHTUNG', r.art);
+    out = replaceTag(out, 'LADEPUNKTE', String(r.anzahl));
+    return out;
+  };
+  const rowsXml = rows.map(r => fillRow(rowXml, r)).join('');
   return xml.slice(0, start) + rowsXml + xml.slice(end);
 }
 
