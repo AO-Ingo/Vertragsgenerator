@@ -142,6 +142,9 @@
     .lbl { display:flex; align-items:center; gap:4px; font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:var(--text-muted); margin-bottom:5px; }
     .lbl .req { color:var(--danger); }
     .lbl .opt { font-weight:400; font-size:11px; text-transform:none; letter-spacing:0; color:var(--text-muted); }
+    .wie-kunde-wrap { display:flex;align-items:center;gap:6px;margin-bottom:4px; }
+    .wie-kunde-wrap input[type=checkbox] { width:14px;height:14px;cursor:pointer;margin:0; }
+    .wie-kunde-wrap label { font-size:11px;color:var(--text-muted);cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500; }
     .sts { font-size: 12px; min-height: 18px; display: flex; align-items: center; gap: 6px; margin-top: 8px; }
     .sts.ok { color: var(--success); }
     .sts.err { color: var(--danger); }
@@ -263,6 +266,9 @@
     .lbl { display:flex; align-items:center; gap:4px; font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:var(--text-muted); margin-bottom:5px; }
     .lbl .req { color:var(--danger); }
     .lbl .opt { font-weight:400; font-size:11px; text-transform:none; letter-spacing:0; color:var(--text-muted); }
+    .wie-kunde-wrap { display:flex;align-items:center;gap:6px;margin-bottom:4px; }
+    .wie-kunde-wrap input[type=checkbox] { width:14px;height:14px;cursor:pointer;margin:0; }
+    .wie-kunde-wrap label { font-size:11px;color:var(--text-muted);cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500; }
     .info-banner {
       background: #EFF6FF; border: 1px solid #BFDBFE;
       border-radius: var(--radius); padding: 10px 14px;
@@ -375,7 +381,7 @@
       <label><div class="lbl">Anzahl Ladepunkte <span class="req">*</span></div><input type="number" id="anzahlLadepunkte" value="1" min="1" oninput="syncMenge(this.value)"></label>
     </div>
     <div class="field-group">
-      <label><div class="lbl">Inbetriebnahme-Datum <span class="opt">(optional)</span></div><input type="date" id="inbetriebnahme"></label>
+      <div><label><div class="lbl">Inbetriebnahme-Datum <span class="opt">(optional)</span></div><input type="date" id="inbetriebnahme"></label><div class="wie-kunde-wrap" style="margin-top:6px"><input type="checkbox" id="inbAusstehend" onchange="toggleInbAusstehend()"><label for="inbAusstehend">ausstehend</label></div></div>
       <label><div class="lbl">Vertragslaufzeit in Jahren <span class="req">*</span></div><input type="number" id="laufzeit" value="2" min="1" max="10">
       </label>
     </div>
@@ -872,6 +878,15 @@ function getArtikelPayload() {
 }
 
 // ── DOCX GENERIEREN ──
+function toggleInbAusstehend() {
+  const cb = document.getElementById('inbAusstehend');
+  const inp = document.getElementById('inbetriebnahme');
+  if (!cb || !inp) return;
+  if (cb.checked) inp.value = '';
+  inp.disabled = cb.checked;
+  inp.style.opacity = cb.checked ? '0.35' : '1';
+}
+function inbAusstehend() { const cb = document.getElementById('inbAusstehend'); return !!(cb && cb.checked); }
 function replaceTag(xml, tag, value) {
   const val=(value||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const ph='{{'+tag+'}}';
@@ -914,7 +929,7 @@ async function genDocx(angebotsnr) {
   const zip = await JSZip.loadAsync(await resp.arrayBuffer());
   let xml = await zip.file('word/document.xml').async('string');
 
-  const inbetrieb = v('inbetriebnahme') ? new Date(v('inbetriebnahme')).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'}) : '';
+  const inbetrieb = inbAusstehend() ? 'ausstehend' : v('inbetriebnahme') ? new Date(v('inbetriebnahme')).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'}) : '';
   const repl = {
     // Standard (alle Profile)
     'ANGEBOTSNUMMER':    angebotsnr || '',
@@ -951,6 +966,9 @@ async function genDocx(angebotsnr) {
     'APKFMTEL':          v('telefon'),
     'APKFMMAIL':         v('email'),
   };
+  // Komma zwischen Kundenadresse und Stellplatz ergänzen, falls die Vorlage keins hat
+  const plainTxt = xml.replace(/<[^>]+>/g, '');
+  if (/\{\{PLZSTADT\}\}\s*Stellplatz/.test(plainTxt) && repl.PLZSTADT) repl.PLZSTADT += ',';
   for (const [tag, val] of Object.entries(repl)) xml = replaceTag(xml, tag, val);
   zip.file('word/document.xml', xml);
   return zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
@@ -1082,6 +1100,8 @@ function resetFormB2C() {
   });
   document.getElementById('datum').value = new Date().toISOString().split('T')[0];
   document.getElementById('anmerkungen').value = '';
+  const inbEl = document.getElementById('inbetriebnahme'); if (inbEl) inbEl.value = '';
+  const inbCb = document.getElementById('inbAusstehend'); if (inbCb) { inbCb.checked = false; toggleInbAusstehend(); }
   document.querySelectorAll('input[type=file]').forEach(el => el.value = '');
   ['angebotHint','vertragHint'].forEach(id => {
     const el = document.getElementById(id);

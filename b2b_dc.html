@@ -344,7 +344,7 @@
     </div>
     <div class="field-group">
       <div id="laufzeitWrap"><label><div class="lbl">Laufzeit <span class="req">*</span></div><input type="number" id="vb_laufzeit" min="1" max="10" placeholder="3"></label></div>
-      <div id="inbetriebnahmeWrap"><label>Inbetriebnahme-Datum<input type="date" id="inbetriebnahme"></label></div>
+      <div id="inbetriebnahmeWrap"><label>Inbetriebnahme-Datum<input type="date" id="inbetriebnahme"></label><div class="wie-kunde-wrap" style="margin-top:6px"><input type="checkbox" id="inbAusstehend" onchange="toggleInbAusstehend()"><label for="inbAusstehend">ausstehend</label></div></div>
     </div>
     <input type="hidden" id="vb_angebotsnr">
   </div>
@@ -586,6 +586,15 @@ function updateArtikelAnzahl() {
 
 // ===== HELPERS =====
 function v(id) { const el=document.getElementById(id); const val=(el||{}).value||''; return typeof val==='string' ? val.trim().replace(/\s+/g,' ') : val; }
+function toggleInbAusstehend() {
+  const cb = document.getElementById('inbAusstehend');
+  const inp = document.getElementById('inbetriebnahme');
+  if (!cb || !inp) return;
+  if (cb.checked) inp.value = '';
+  inp.disabled = cb.checked;
+  inp.style.opacity = cb.checked ? '0.35' : '1';
+}
+function inbAusstehend() { const cb = document.getElementById('inbAusstehend'); return !!(cb && cb.checked); }
 function fmtDate(iso) { if(!iso)return''; const[y,m,d]=iso.split('-'); return d+'.'+m+'.'+y; }
 function getLaufzeit() { return document.getElementById('vb_laufzeit')?.value||''; }
 
@@ -679,7 +688,7 @@ async function genDocx() {
       'PLZSTADT': (v('ag_plz')+' '+v('ag_stadt')).trim(),
       'DATUM': fmtDate(new Date().toISOString().split('T')[0]),
       'LAUFZEIT': getLaufzeit(),
-      'INBETRIEBNAHME': fmtDate(v('inbetriebnahme')),
+      'INBETRIEBNAHME': inbAusstehend() ? 'ausstehend' : fmtDate(v('inbetriebnahme')),
       'APKFMNAME': v('ap_tech_name'), 'APKFMTEL': v('ap_tech_tel'), 'APKFMMAIL': v('ap_tech_email'),
       'APTECHNAME': v('ap_name'), 'APTECHTEL': v('ap_tel'), 'APTECHMAIL': v('ap_email'),
     };
@@ -847,6 +856,7 @@ function resetForm() {
   });
   document.getElementById('vb_angebotsnr').value = '';
   const inb = document.getElementById('inbetriebnahme'); if (inb) inb.value = '';
+  const inbCb = document.getElementById('inbAusstehend'); if (inbCb) { inbCb.checked = false; toggleInbAusstehend(); }
   clearInvalid();
   // Reset table
   document.getElementById('ladeBody').innerHTML = '';
