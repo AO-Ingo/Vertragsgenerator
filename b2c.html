@@ -312,8 +312,9 @@
     <select id="profileSelect" onchange="applyProfile()" style="width:100%;font-size:14px;padding:10px 14px;border-radius:var(--radius-lg);font-weight:500;border:1px solid var(--border);background:var(--surface);font-family:'DM Sans',sans-serif;color:var(--text);outline:none;cursor:pointer;">
       <option value="" disabled selected>— Kundenprofil auswählen —</option>
       <option value="lerners">Lerner'sches Schloss</option>
-      <option value="gwg-98b">GWG Seepark (Vaihinger Str. 98B)</option>
-      <option value="gwg-122">GWG Seepark (Vaihinger Str. 122)</option>
+      <option value="gwg-98b">GWG Seepark/Ostfildern reev/amba-living (Vaihinger Str. 98B)</option>
+      <option value="gwg-122">GWG Seepark/Ostfildern reev/amba-living (Vaihinger Str. 122)</option>
+      <option value="gwg-ostfildern">GWG Seepark/Ostfildern reev/amba-living (Nelly-Sachs-Str. 20)</option>
       <option value="lbbw">LBBW Park Trio</option>
       <option value="gsw">GSW Reutlingen</option>
       <option value="nio">Nio Project / Premium Immo – Operative Betriebsführung</option>
@@ -500,7 +501,7 @@ const PROFILES = {
     ]
   },
   "gwg-98b": {
-    "label": "GWG Seepark (Vaihinger Str. 98B)",
+    "label": "GWG Seepark/Ostfildern reev/amba-living (Vaihinger Str. 98B)",
     "standortName": "GWG Seepark",
     "standortAdresse": "Vaihinger Straße 98B, 70567 Stuttgart",
     "geraet": "Mennekes Amtron Professional AC",
@@ -516,9 +517,25 @@ const PROFILES = {
     ]
   },
   "gwg-122": {
-    "label": "GWG Seepark (Vaihinger Str. 122)",
+    "label": "GWG Seepark/Ostfildern reev/amba-living (Vaihinger Str. 122)",
     "standortName": "GWG Seepark",
     "standortAdresse": "Vaihinger Straße 122, 70567 Stuttgart",
+    "geraet": "Mennekes Amtron Professional AC",
+    "docxUrl": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/Betreibervertrag_AO_GWG_Seepark_Vorlage.docx",
+    "artikel": [
+      {
+        "id": "520234000003573017",
+        "name": "Vollbetrieb - ganzheitlicher Betrieb der Ladestation (AMBA/reev living)",
+        "preis": "13,87 € / Monat",
+        "pflicht": true,
+        "menge": 1
+      }
+    ]
+  },
+  "gwg-ostfildern": {
+    "label": "GWG Seepark/Ostfildern reev/amba-living (Nelly-Sachs-Str. 20)",
+    "standortName": "GWG Ostfildern",
+    "standortAdresse": "Nelly-Sachs-Str. 20, 73760 Ostfildern",
     "geraet": "Mennekes Amtron Professional AC",
     "docxUrl": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/Betreibervertrag_AO_GWG_Seepark_Vorlage.docx",
     "artikel": [
@@ -658,6 +675,17 @@ const GITHUB_BASE = 'https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator
 
 let currentProfile = null;
 
+// Standard-Artikel für "Sonstiges" (Zoho braucht mind. 1 Line Item)
+const SONSTIGES_ARTIKEL = [
+  {
+    "id": "520234000000111321",
+    "name": "Vollbetrieb - ganzheitlicher Betrieb der Ladestation",
+    "preis": "240 € / Jahr",
+    "pflicht": true,
+    "menge": 1
+  }
+];
+
 // ── PROFIL ANWENDEN ──
 function applyProfile(forceKey) {
   const key = forceKey || document.getElementById('profileSelect').value;
@@ -674,7 +702,7 @@ function applyProfile(forceKey) {
     document.getElementById('geraet').value = '';
     document.getElementById('standortAdresse').readOnly = false;
     document.getElementById('geraet').readOnly = false;
-    renderArtikel([]);
+    renderArtikel(SONSTIGES_ARTIKEL);
     document.getElementById('btnVertragDocx') && (document.getElementById('btnVertragDocx').disabled = true);
     document.getElementById('dlSection').style.display = 'none';
     return;
@@ -834,6 +862,7 @@ async function b2cSenden() {
   if (!validatePflichtfelder()) return;
   setSts('makeSts','proc','Wird gesendet…');
   const artikel = getArtikelPayload();
+  const artListe = currentProfile?.artikel || SONSTIGES_ARTIKEL;
   try {
     const resp = await fetch(MAKE_WEBHOOK, {
       method: 'POST',
@@ -842,11 +871,11 @@ async function b2cSenden() {
         quelle: 'b2c',
         profil: currentProfile?.key || 'sonstiges',
         profil_label: currentProfile?.label || 'Sonstiges',
-        zoho_artikel_id: currentProfile?.artikel?.[0]?.id || '',
-        zoho_artikel_name: currentProfile?.artikel?.[0]?.name || '',
-        zoho_artikel_id_2: currentProfile?.artikel?.[1]?.id || '',
-        zoho_artikel_name_2: currentProfile?.artikel?.[1]?.name || '',
-        zoho_menge_2: currentProfile?.artikel?.[1] ? parseInt(document.getElementById('menge-1')?.value || 1) : '',
+        zoho_artikel_id: artListe?.[0]?.id || '',
+        zoho_artikel_name: artListe?.[0]?.name || '',
+        zoho_artikel_id_2: artListe?.[1]?.id || '',
+        zoho_artikel_name_2: artListe?.[1]?.name || '',
+        zoho_menge_2: artListe?.[1] ? parseInt(document.getElementById('menge-1')?.value || 1) : '',
         zoho_anzahl: parseInt(document.getElementById('anzahlLadepunkte')?.value || 1),
         vorname: v('vorname'), nachname: v('nachname'),
         email: v('email'), telefon: v('telefon'),
@@ -867,8 +896,8 @@ async function b2cSenden() {
 }
 
 function getArtikelPayload() {
-  if (!currentProfile?.artikel) return [];
-  return currentProfile.artikel.map((a, i) => ({
+  const liste = currentProfile?.artikel || SONSTIGES_ARTIKEL;
+  return liste.map((a, i) => ({
     id: a.id, name: a.name,
     menge: parseInt(document.getElementById('menge-'+i)?.value || 1),
     preis: a.preis, pflicht: a.pflicht,
