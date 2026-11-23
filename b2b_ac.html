@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>">
-  <title>AMBA Vertragsgenerator – Betreuungsverträge AC</title>
+  <title>AMBA Vertragsgenerator – Betreuungsverträge AC/DC</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
   <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
@@ -271,11 +271,11 @@
 <header class="site-header">
   <a class="back-link" href="index.html">← Übersicht</a>
   <span class="logo-amba">A M B A</span>
-  <span class="logo-sub">Betreuungsverträge AC</span>
+  <span class="logo-sub">Betreuungsverträge AC/DC</span>
 </header>
 <div class="content">
   <div class="page-header">
-    <div class="page-title">B2B Verträge – AC</div>
+    <div class="page-title">B2B Verträge – AC/DC</div>
     <div class="page-subtitle">Vertragstyp auswählen und Formular ausfüllen</div>
   </div>
   <div style="margin-bottom:16px">
@@ -283,8 +283,10 @@
       <option value="" disabled selected>— Vertragstyp auswählen —</option>
       <option value="vollbetrieb-mit-strom">Vollbetrieb mit Strom AC</option>
       <option value="vollbetrieb">Vollbetrieb ohne Strom AC</option>
-      <option value="betrieb">Technische Betriebsführung AC</option>
-      <option value="wartung">Rahmenwartungsvertrag AC</option>
+      <option value="vollbetrieb-dc" disabled>Vollbetrieb ohne Strom DC (demnächst)</option>
+      <option value="vollbetrieb-strom-dc" disabled>Vollbetrieb mit Strom DC (demnächst)</option>
+      <option value="betrieb">Technische Betriebsführung AC/DC</option>
+      <option value="wartung">Rahmenwartungsvertrag Ladestationen AC/DC</option>
       <option value="servicerahmen">Servicerahmenvertrag (Versicherungsmodell) AC</option>
     </select>
   </div>
@@ -295,7 +297,6 @@
     <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Vertragsvorlage herunterladen</div>
     <div id="dlLinks"></div>
   </div>
-  <!-- DC-TAB: verwendet in b2b_dc.html -->
 
   <!-- Auftraggeber -->
   <div class="card">
@@ -367,6 +368,7 @@
         <thead><tr>
           <th style="width:28px">#</th>
           <th>Standort (Name, Anschrift) <span style="color:var(--danger)">*</span></th>
+          <th class="col-acdc" style="width:78px">AC/DC</th>
           <th>Art der Ladeeinrichtung</th>
           <th style="width:90px">Anzahl Ladepunkte</th>
           <th style="width:32px"></th>
@@ -386,9 +388,11 @@
         <div class="card-header-sub">Zoho-Artikel für diesen Vertragstyp</div>
       </div>
     </div>
-    <div class="field-group">
-      <label>Artikelname<div class="artikel-readonly" id="artikelName">– Vertragstyp auswählen –</div></label>
-      <label>Anzahl (Σ Ladepunkte)<div class="artikel-anzahl" id="artikelAnzahl">–</div></label>
+    <div id="artikelList">
+      <div class="field-group">
+        <label>Artikelname<div class="artikel-readonly">– Vertragstyp auswählen –</div></label>
+        <label>Anzahl (Σ Ladepunkte)<div class="artikel-anzahl">–</div></label>
+      </div>
     </div>
   </div>
 
@@ -441,8 +445,35 @@
 
 // ===== CONFIG =====
 const GITHUB_BASE = 'https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/';
-const TEMPLATE_URLS = {"betrieb": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_VertragTechBetriebsfuehrung%20Vorlage.docx", "betrieb-dc": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_VertragTechBetriebsfuehrung_DC%20-%20Vorlage.docx", "vollbetrieb": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_Vollbetrieb_ohne_Strom_Vorlage.docx", "vollbetrieb-mit-strom": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_Vollbetrieb_mit_Strom_Vorlage.docx", "wartung": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/AMBA_Wartungsvertrag%20Vorlage.docx", "servicerahmen": "https://raw.githubusercontent.com/AO-Ingo/Vertragsgenerator/main/Servicerahmenvertrag_Versicherungsmodell_Vorlage.docx"};
-const ZOHO_MAP = {"betrieb": {"id": "520234000000111332", "name": "technische Betriebsführung"}, "betrieb-dc": {"id": "520234000003960018", "name": "technische Betriebsführung DC"}, "vollbetrieb": {"id": "520234000003540041", "name": "Vollbetrieb - ganzheitlicher Betrieb der Ladestation ohne Strom"}, "vollbetrieb-mit-strom": {"id": "", "name": "Vollbetrieb mit Strom AC"}, "wartung": {"id": "520234000000056504", "name": "Wartung AC-LP bis 22kW nach DGUV-3"}, "servicerahmen": {"id": "520234000000111343", "name": "Servicerahmenvertrag"}};
+const TEMPLATE_URLS = {
+  "betrieb": GITHUB_BASE + "AMBA_TechBetriebsfuehrung_ACDC_Vorlage.docx",
+  "wartung": GITHUB_BASE + "AMBA_Rahmenwartungsvertrag_Ladestationen_Vorlage.docx",
+  "vollbetrieb": GITHUB_BASE + "AMBA_Vollbetrieb_ohne_Strom_Vorlage.docx",
+  "vollbetrieb-mit-strom": GITHUB_BASE + "AMBA_Vollbetrieb_mit_Strom_Vorlage.docx",
+  "servicerahmen": GITHUB_BASE + "Servicerahmenvertrag_Versicherungsmodell_Vorlage.docx"
+};
+// Kombi-Verträge (AC/DC): je Ladepunkt-Art eigener Zoho-Artikel
+const ZOHO_MAP = {
+  "betrieb": {"name": "Technische Betriebsführung AC/DC", "ac": {"id": "520234000000111332", "name": "technische Betriebsführung"}, "dc": {"id": "520234000003960018", "name": "technische Betriebsführung DC"}},
+  "wartung": {"name": "Rahmenwartungsvertrag Ladestationen AC/DC", "ac": {"id": "520234000000056504", "name": "Wartung AC-LP bis 22kW nach DGUV-3"}, "dc": {"id": "520234000000323030", "name": "Wartung DC-LP bis 400kW nach DGUV-3"}},
+  "vollbetrieb": {"id": "520234000003540041", "name": "Vollbetrieb - ganzheitlicher Betrieb der Ladestation ohne Strom"},
+  "vollbetrieb-mit-strom": {"id": "", "name": "Vollbetrieb mit Strom AC"},
+  "servicerahmen": {"id": "520234000000111343", "name": "Servicerahmenvertrag"}
+};
+const isKombi = typ => typ === 'betrieb' || typ === 'wartung';
+// Liefert die Zoho-Positionen: bei Kombi-Verträgen getrennt nach AC/DC, sonst ein Artikel über alle Ladepunkte
+function getLineItems(typ, rows) {
+  const a = ZOHO_MAP[typ];
+  if (!a) return [];
+  if (a.ac) {
+    const sum = t => rows.filter(r => r.acdc === t).reduce((s, r) => s + (r.anzahl || 1), 0);
+    return [['ac', sum('ac')], ['dc', sum('dc')]]
+      .filter(([, q]) => q > 0)
+      .map(([t, q]) => ({ item_id: a[t].id, name: a[t].name, quantity: q }));
+  }
+  const total = rows.reduce((s, r) => s + (r.anzahl || 1), 0);
+  return [{ item_id: a.id, name: a.name, quantity: total }];
+}
 const MAKE_WEBHOOK = 'https://hook.eu2.make.com/bxt8ju15xwttjyphu3ubb1jdff6xlh4w';
 
 let currentTyp = '';
@@ -493,8 +524,10 @@ function setTyp(typ) {
   if (pw2) pw2.style.display = (typ === 'servicerahmen') ? '' : 'none';
 
   // Ansprechpartner + Inbetriebnahme je Vertragstyp ausgrauen
-  const isTechBF = typ === 'betrieb' || typ === 'betrieb-dc';
-  const isWartung = typ === 'wartung' || typ === 'wartung-dc';
+  const isTechBF = typ === 'betrieb';
+  const isWartung = typ === 'wartung';
+  // AC/DC-Spalte nur bei Kombi-Verträgen
+  document.querySelectorAll('.col-acdc').forEach(el => el.style.display = isKombi(typ) ? '' : 'none');
   const apKfm = document.getElementById('apKfmBlock');
   const apTech = document.getElementById('apTechBlock');
   const inbWrap = document.getElementById('inbetriebnahmeWrap');
@@ -509,13 +542,11 @@ function setTyp(typ) {
   const m2hint  = document.getElementById('mergeHint2');
   const m2auto  = document.getElementById('mergeHint2Auto');
   if (m2label) m2label.style.display = isVollbetrieb ? 'none' : '';
-  if (m2input) m2input.style.display  = isVollbetrieb ? 'none' : '';
   if (m2hint)  m2hint.style.display   = isVollbetrieb ? 'none' : '';
   if (m2auto)  m2auto.style.display   = isVollbetrieb ? '' : 'none';
 
   // Artikel-Karte
   const a = ZOHO_MAP[typ];
-  document.getElementById('artikelName').textContent = a ? a.name : '– Vertragstyp auswählen –';
   updateArtikelAnzahl();
 
   // Download-Link
@@ -523,7 +554,7 @@ function setTyp(typ) {
   const dlSec = document.getElementById('dlSection');
   if (url && a) {
     dlSec.style.display = '';
-    document.getElementById('dlLinks').innerHTML = `<a href="${url}" download style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-weight:500;color:var(--text);text-decoration:none;background:var(--surface)" onmouseover="this.style.borderColor='var(--border-strong)';this.style.background='var(--surface2)'" onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'"><span>⬇</span> ${a.name}</a>`;
+    document.getElementById('dlLinks').innerHTML = `<a href="${url}" download style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-weight:500;color:var(--text);text-decoration:none;background:var(--surface)" onmouseover="this.style.borderColor='var(--border-strong)';this.style.background='var(--surface2)'" onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'"><span>⬇</span> ${a.label || a.name}</a>`;
   } else {
     dlSec.style.display = 'none';
   }
@@ -548,6 +579,7 @@ function addRow(standort='', art='', anzahl=1) {
       </div>
       <input type="text" id="standort-${id}" value="${standort}" placeholder="Name, Anschrift Standort">
     </td>
+    <td class="col-acdc" style="width:78px;${isKombi(currentTyp)?'':'display:none'}"><select id="acdc-${id}" onchange="updateArtikelAnzahl()" style="width:100%;padding:6px 4px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);font-family:inherit;font-size:13px"><option value="ac">AC</option><option value="dc">DC</option></select></td>
     <td><input type="text" id="art-${id}" value="${art}" placeholder="Hersteller, Modell" oninput="updateArtikelAnzahl()"></td>
     <td style="width:80px"><input type="number" id="anzahl-${id}" value="${anzahl}" min="1" style="width:60px;text-align:center" oninput="updateArtikelAnzahl()"></td>
     <td style="width:32px"><button class="btn-del-row" onclick="delRow(${id})">×</button></td>`;
@@ -581,15 +613,19 @@ function getRows() {
     return {
       standort: document.getElementById('standort-' + id)?.value || '',
       art:      document.getElementById('art-' + id)?.value || '',
+      acdc:     isKombi(currentTyp) ? (document.getElementById('acdc-' + id)?.value || 'ac') : 'ac',
       anzahl:   parseInt(document.getElementById('anzahl-' + id)?.value || 1),
     };
   });
 }
 
 function updateArtikelAnzahl() {
-  const total = getRows().reduce((sum, r) => sum + (r.anzahl || 1), 0);
-  const el = document.getElementById('artikelAnzahl');
-  if (el) el.textContent = total || '–';
+  const el = document.getElementById('artikelList');
+  if (!el) return;
+  const items = currentTyp ? getLineItems(currentTyp, getRows()) : [];
+  const esc = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const line = (name, q) => `<div class="field-group"><label>Artikelname<div class="artikel-readonly">${esc(name)}</div></label><label>Anzahl (Σ Ladepunkte)<div class="artikel-anzahl">${q}</div></label></div>`;
+  el.innerHTML = items.length ? items.map(i => line(i.name, i.quantity)).join('') : line('– Vertragstyp auswählen –', '–');
 }
 
 // ===== HELPERS =====
@@ -663,7 +699,8 @@ function expandLadeTable(xml, rows) {
   const fillRow = (template, r) => {
     let out = template;
     out = replaceTag(out, 'STANDORT', r.standort);
-    out = replaceTag(out, 'LADEEINRICHTUNG', r.art);
+    const art = isKombi(currentTyp) ? [r.art, '(' + r.acdc.toUpperCase() + ')'].filter(Boolean).join(' ') : r.art;
+    out = replaceTag(out, 'LADEEINRICHTUNG', art);
     out = replaceTag(out, 'LADEPUNKTE', String(r.anzahl));
     return out;
   };
@@ -727,12 +764,13 @@ async function sendenAnMake() {
   if (!a) { setSts('makeSts','err','✕ Vertragstyp nicht erkannt.'); return; }
   setSts('makeSts','proc','Wird gesendet…');
   const rows = getRows();
-  const total = rows.reduce((s,r)=>s+(r.anzahl||1),0);
+  const items = getLineItems(currentTyp, rows);
+  const total = items.reduce((s,i)=>s+i.quantity,0);
   try {
     const resp = await fetch(MAKE_WEBHOOK, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       quelle: 'b2b',
-      vertragstyp: currentTyp, zoho_artikel_id: a.id, zoho_artikel_name: a.name, zoho_anzahl: total,
-      line_items: [{ item_id: a.id, name: a.name, quantity: total }],
+      vertragstyp: currentTyp, zoho_artikel_id: items[0]?.item_id || '', zoho_artikel_name: items[0]?.name || '', zoho_anzahl: total,
+      line_items: items,
       ag_firma: v('ag_firma'), ag_strasse: v('ag_strasse'), ag_plz: v('ag_plz'), ag_stadt: v('ag_stadt'),
       stand_datum: new Date().toISOString().split('T')[0],
       inbetriebnahme: v('inbetriebnahme'),
